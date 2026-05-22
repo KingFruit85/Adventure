@@ -1,0 +1,24 @@
+id: warrior
+name: Warrior
+description: |
+  A seasoned fighter, scarred by skirmishes along the Ashwood's edge. Strong of arm,
+  short on patience. You favour blade and brute force over scholarship.
+hitDie: 10
+abilityScoreBonus:
+  strength: 2
+  constitution: 1
+startingItems:
+  - itemId: rusty_dagger
+    quantity: 1
+availableActions:
+  - MOVE
+  - LOOK
+  - EXAMINE
+  - INVENTORY
+  - STATUS
+  - TAKE_ITEM
+  - DROP_ITEM
+  - USE_ITEM
+  - TALK_TO_NPC
+  - ATTACK
+  - RECALL

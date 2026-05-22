@@ -1,0 +1,25 @@
+id: mage
+name: Mage
+description: |
+  A scholar of the old tongues, drawn to Eldenmoor by the whispers in the Ashwood.
+  Common folk eye your robes with suspicion — but they will take your help if they
+  must.
+hitDie: 6
+abilityScoreBonus:
+  intelligence: 2
+  wisdom: 1
+startingItems: []
+availableActions:
+  - MOVE
+  - LOOK
+  - EXAMINE
+  - INVENTORY
+  - STATUS
+  - TAKE_ITEM
+  - DROP_ITEM
+  - USE_ITEM
+  - TALK_TO_NPC
+  - CAST_SPELL
+  - RECALL
+spells:
+  - fire_bolt

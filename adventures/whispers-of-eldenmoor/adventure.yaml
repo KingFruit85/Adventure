@@ -1,0 +1,196 @@
+id: whispers-of-eldenmoor
+title: Whispers of Eldenmoor
+description: A cursed village. A forest that whispers. A goblin chief at the heart of it all.
+minPlayers: 1
+maxPlayers: 2
+startingLocationId: tavern
+startingInventory: []
+tone: dark fantasy, tense, atmospheric
+
+classFiles:
+  - classes/warrior.yaml
+  - classes/mage.yaml
+
+rules:
+  allowedActionTypes:
+    - MOVE
+    - LOOK
+    - EXAMINE
+    - INVENTORY
+    - STATUS
+    - TAKE_ITEM
+    - DROP_ITEM
+    - USE_ITEM
+    - TALK_TO_NPC
+    - ATTACK
+    - CAST_SPELL
+    - RECALL
+  combatSystem: SRD5E_SIMPLIFIED
+  permaDeath: false
+  maxInventorySize: 10
+  globalForbiddenPhrases: []
+
+items:
+  rusty_dagger:
+    id: rusty_dagger
+    name: Rusty Dagger
+    description: A short, pitted blade. The grip is wrapped in cracked leather.
+    category: WEAPON
+    isConsumable: false
+    isQuestItem: false
+    isStackable: false
+    maxDurability: 20
+    combatProperties:
+      damageDie: 4
+      damageBonus: 0
+      damageType: PIERCING
+      range: MELEE
+      twoHanded: false
+
+  bread_loaf:
+    id: bread_loaf
+    name: Loaf of Bread
+    description: Dense, dark, still warm from Mira's oven.
+    category: CONSUMABLE
+    isConsumable: true
+    isQuestItem: false
+    isStackable: true
+    maxCharges: 3
+
+  goblin_tooth:
+    id: goblin_tooth
+    name: Goblin Tooth
+    description: A yellowed canine, longer than a dog's. Drops to the floor with a faint click.
+    category: QUEST_ITEM
+    isConsumable: false
+    isQuestItem: true
+    isStackable: false
+
+npcs:
+  mira:
+    id: mira
+    name: Mira
+    personality: |
+      Innkeeper of The Broken Hearth. Tired, hard-eyed, and slow to trust strangers.
+      Speaks plainly. Has lost her cousin to the Ashwood and will say so if asked
+      about the forest.
+    initialDisposition: NEUTRAL
+    givesQuestId: the_goblin_threat
+    knowledge:
+      - the missing villagers
+      - the goblin tooth left on the smith's son's pillow
+      - the path north into the Ashwood
+      - rumours that the goblins have a chief who speaks the old tongue
+
+  goblin_chief:
+    id: goblin_chief
+    name: The Goblin Chief
+    personality: |
+      Cruel, lean, scarred across one eye. Wears trophies of past kills. Speaks
+      broken Common in a sing-song mockery. Will not flee — it has a reputation
+      with its tribe to maintain.
+    initialDisposition: HOSTILE
+    knowledge:
+      - the missing villagers (it took them)
+      - the deeper Ashwood (it has been there)
+    combatStats:
+      hp: 12
+      ac: 13
+      attackBonus: 3
+      damageDie: 6
+      damageBonus: 1
+      xpReward: 100
+
+locations:
+  tavern:
+    id: tavern
+    name: The Broken Hearth Tavern
+    atmosphericDescription: |
+      A low-beamed common room thick with peat smoke. The hearth — broken, hence
+      the name — has been patched with river stones. Mira watches you from
+      behind the bar, polishing the same mug she was polishing when you walked
+      in. Through the small north window, the Ashwood stands black against the
+      twilight.
+    exits:
+      - direction: north
+        toLocationId: forest_clearing
+        requiresQuestId: the_goblin_threat
+        lockedMessage: |
+          Mira's voice cuts across the room before you reach the door. "You've
+          no reason to walk into that forest, stranger. Not yet."
+    items:
+      - itemId: rusty_dagger
+        quantity: 1
+      - itemId: bread_loaf
+        quantity: 1
+    npcs:
+      - mira
+    puzzleIds: []
+
+  forest_clearing:
+    id: forest_clearing
+    name: The Ashwood Clearing
+    atmosphericDescription: |
+      The trees give way to a ring of grey grass crushed flat by many small
+      feet. In the centre, a hollowed stump has been set up like a throne. The
+      Goblin Chief sits on it, picking its teeth with the point of a knife.
+      Behind it, a pile of small belongings — a shoe, a wooden toy, a bone
+      whistle. The Ashwood watches.
+    exits:
+      - direction: south
+        toLocationId: tavern
+    items:
+      - itemId: goblin_tooth
+        quantity: 1
+    npcs:
+      - goblin_chief
+    puzzleIds:
+      - goblin_chief_combat
+    requiresQuestId: the_goblin_threat
+
+puzzles:
+  goblin_chief_combat:
+    id: goblin_chief_combat
+    locationId: forest_clearing
+    description: |
+      The Goblin Chief blocks the only path deeper into the Ashwood. Combat is
+      the only way past it. Defeating it ends the immediate threat to Eldenmoor.
+    solution:
+      type: COMBAT
+      combatTargetNpcId: goblin_chief
+    rewardItemIds:
+      - goblin_tooth
+    rewardGoalIds:
+      - defeat_goblin_chief
+    hint: |
+      The goblin will not bargain. It has its tribe's eyes on it. The only
+      language it speaks here is steel — or, for the Mage, fire.
+
+quests:
+  the_goblin_threat:
+    id: the_goblin_threat
+    title: The Goblin Threat
+    description: |
+      Mira has begged you to find and end the goblin chief that has been taking
+      villagers from their beds. The trail leads north, into the Ashwood.
+    grantedByNpcId: mira
+    completionGoalId: defeat_goblin_chief
+    unlocksLocationIds:
+      - forest_clearing
+
+goals:
+  defeat_goblin_chief:
+    id: defeat_goblin_chief
+    description: Slay the Goblin Chief in the Ashwood clearing.
+    type: DEFEAT_NPC
+    targetId: goblin_chief
+    isEndGame: true
+    endGameType: VICTORY
+
+  party_wiped:
+    id: party_wiped
+    description: All players have fallen.
+    type: DEFEAT_NPC
+    targetId: party
+    isEndGame: true
+    endGameType: DEFEAT

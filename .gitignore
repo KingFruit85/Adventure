@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+.turbo/
+coverage/
+
+*.log
+*.tsbuildinfo
+.DS_Store
+.env
+.env.local
+.env.*.local
+
+# SQLite databases created at runtime
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+
+# Adventure session blob logs
+sessions/
+*.log.jsonl
+
+# IDE
+.vscode/
+.idea/
+
+# Claude local settings (user-specific permissions)
+.claude/settings.local.json

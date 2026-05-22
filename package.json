@@ -1,0 +1,22 @@
+{
+  "name": "loreforge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI-narrated choose-your-own-adventure game service",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.2.2",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
