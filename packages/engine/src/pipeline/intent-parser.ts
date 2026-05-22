@@ -1,4 +1,10 @@
-import type { ActionType, AdventureDefinition, GameSession, ParsedAction } from '@loreforge/shared';
+import {
+  type ActionType,
+  type AdventureDefinition,
+  type GameSession,
+  type ParsedAction,
+  ParsedActionSchema,
+} from '@loreforge/shared';
 import type { IntentClassifier, LLMProvider } from '../llm/provider.js';
 
 /**
@@ -117,19 +123,102 @@ function resolveNpcIdInLocation(
 }
 
 /**
- * Phase 2 implementation will go here. Wraps an LLMProvider.complete() call
- * with a structured prompt that asks for JSON output matching ParsedAction.
+ * Phase 2 implementation: haiku-backed intent classifier.
+ *
+ * Strategy: ask haiku to return a JSON object describing the action, then
+ * validate it against ParsedActionSchema. If parsing fails (malformed JSON,
+ * action not in the allowed set, target not present in the current location),
+ * we fall back to KeywordIntentClassifier — the deterministic parser still
+ * gets the obvious cases right and a LOOK fallback is always safe.
+ *
+ * Why a JSON prompt instead of structured outputs: the ParsedAction shape is
+ * a discriminated union, which `output_config.format` schemas can express
+ * but constrain in ways that are awkward to keep in sync as the action set
+ * grows. A plain JSON instruction + Zod validation is simpler and lets us
+ * fall through to keyword parsing cleanly when the model refuses or
+ * returns nonsense.
  */
 export class LLMIntentClassifier implements IntentClassifier {
-  constructor(private readonly _llm: LLMProvider) {}
+  private fallback = new KeywordIntentClassifier();
+
+  constructor(private readonly llm: LLMProvider) {}
+
   async classify(
-    _rawInput: string,
-    _context: {
+    rawInput: string,
+    context: {
       session: GameSession;
       adventure: AdventureDefinition;
       allowedActions: ActionType[];
     },
   ): Promise<ParsedAction> {
-    throw new Error('LLMIntentClassifier not yet implemented — Phase 2');
+    const player = context.session.players.find(
+      (p) => p.id === context.session.currentTurnPlayerId,
+    );
+    const location = player ? context.adventure.locations[player.currentLocationId] : undefined;
+    if (!player || !location) return this.fallback.classify(rawInput, context);
+
+    const itemsHere = location.items.map((g) => g.itemId).join(', ') || '(none)';
+    const npcsHere = location.npcs.join(', ') || '(none)';
+    const inventoryIds = player.inventory.map((i) => i.instanceId).join(', ') || '(empty)';
+    const exitDirections = location.exits.map((e) => e.direction).join(', ') || '(none)';
+    const spells = player.spells.join(', ') || '(none)';
+
+    const systemPrompt = `You are an action classifier for a text adventure game. Given a player's raw input, classify it into one of the allowed action types and extract its parameters.
+
+Return ONLY a single JSON object — no prose, no markdown fences. The shape is:
+{ "type": <ACTION_TYPE>, "params": { ... } }
+
+The "params" object must match the action type:
+- MOVE:        { "type": "MOVE", "direction": <string from exit directions> }
+- TAKE_ITEM:   { "type": "TAKE_ITEM", "itemId": <itemId present in current location> }
+- DROP_ITEM:   { "type": "DROP_ITEM", "instanceId": <instanceId from player inventory> }
+- USE_ITEM:    { "type": "USE_ITEM", "instanceId": <instanceId from player inventory>, "targetId": <optional> }
+- TALK_TO_NPC: { "type": "TALK_TO_NPC", "npcId": <npcId present in current location> }
+- ATTACK:      { "type": "ATTACK", "targetNpcId": <npcId present in current location> }
+- CAST_SPELL:  { "type": "CAST_SPELL", "spellId": <spellId from player spells>, "targetId": <optional> }
+- EXAMINE:     { "type": "EXAMINE", "targetId": <any visible id or noun> }
+- LOOK:        { "type": "LOOK" }
+- INVENTORY:   { "type": "INVENTORY" }
+- STATUS:      { "type": "STATUS" }
+- RECALL:      { "type": "RECALL" }
+
+If the input is ambiguous or impossible (e.g. attacking when ATTACK is not allowed for this class), default to LOOK.
+Use only IDs that appear in the lists provided — never invent IDs.`;
+
+    const userPrompt = `Allowed action types: ${context.allowedActions.join(', ')}
+
+Available exit directions: ${exitDirections}
+Items in this location: ${itemsHere}
+NPCs in this location: ${npcsHere}
+Player inventory instanceIds: ${inventoryIds}
+Player spells: ${spells}
+
+Player input: ${JSON.stringify(rawInput)}
+
+Classify this input. Return only the JSON object.`;
+
+    try {
+      const raw = await this.llm.complete({ systemPrompt, userPrompt, maxTokens: 256 });
+      const cleaned = stripJsonFence(raw);
+      const parsed = JSON.parse(cleaned) as { type: ActionType; params: unknown };
+      const action: ParsedAction = {
+        type: parsed.type,
+        rawInput,
+        params: parsed.params as ParsedAction['params'],
+      };
+      const validated = ParsedActionSchema.parse(action);
+      if (validated.type !== validated.params.type) {
+        throw new Error('action type and params.type disagree');
+      }
+      return validated;
+    } catch {
+      return this.fallback.classify(rawInput, context);
+    }
   }
+}
+
+function stripJsonFence(raw: string): string {
+  const trimmed = raw.trim();
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  return fenceMatch ? fenceMatch[1]!.trim() : trimmed;
 }

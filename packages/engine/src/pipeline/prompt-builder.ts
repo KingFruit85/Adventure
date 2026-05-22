@@ -3,7 +3,7 @@ import type {
   DiceRoll,
   GameSession,
   ParsedAction,
-  PlayerState,
+  StateChange,
 } from '@loreforge/shared';
 import type { NarrativePrompt, NarratorToolDefinition } from '../llm/provider.js';
 
@@ -148,26 +148,47 @@ NARRATIVE RULES:
 - Keep responses to 2-4 short paragraphs unless dialogue requires more.
 `.trim();
 
-export function buildSystemPrompt(adventure: AdventureDefinition, session: GameSession): string {
-  const characterSheets = session.players.map((p) => formatCharacterSheet(p)).join('\n\n');
+/**
+ * The system prompt is *cacheable*. It contains only content that is stable
+ * for the lifetime of an adventure run:
+ *   - world context
+ *   - tone
+ *   - behavioural rules
+ *   - per-adventure ID dictionaries (locations, items, NPCs, etc.) so Claude
+ *     knows what IDs to pass to tool calls without guessing
+ *
+ * Player state, current location details, recent turns, and the action being
+ * resolved are all in the *user* context — they change every turn and would
+ * invalidate the cache if placed here.
+ */
+export function buildSystemPrompt(adventure: AdventureDefinition): string {
+  const locationCatalog = Object.values(adventure.locations)
+    .map((l) => `- ${l.id}: ${l.name}`)
+    .join('\n');
+  const itemCatalog = Object.values(adventure.items)
+    .map((i) => `- ${i.id}: ${i.name}`)
+    .join('\n');
+  const npcCatalog = Object.values(adventure.npcs)
+    .map((n) => `- ${n.id}: ${n.name}`)
+    .join('\n');
+  const questCatalog = Object.values(adventure.quests)
+    .map((q) => `- ${q.id}: ${q.title}`)
+    .join('\n');
+  const goalCatalog = Object.values(adventure.goals)
+    .map((g) => `- ${g.id}: ${g.description}${g.isEndGame ? ` [END:${g.endGameType}]` : ''}`)
+    .join('\n');
 
   return [
-    `WORLD CONTEXT:\n${adventure.worldContext}`,
-    `TONE: ${adventure.tone}`,
-    BEHAVIORAL_RULES,
-    `PLAYERS:\n${characterSheets}`,
-  ].join('\n\n---\n\n');
-}
-
-function formatCharacterSheet(player: PlayerState): string {
-  return [
-    `Name: ${player.name}`,
-    `Class: ${player.characterClass.name}`,
-    `HP: ${player.hp.current}/${player.hp.max}`,
-    `Location: ${player.currentLocationId}`,
-    `Spells: ${player.spells.length > 0 ? player.spells.join(', ') : 'none'}`,
-    `Active quests: ${player.activeQuestIds.length > 0 ? player.activeQuestIds.join(', ') : 'none'}`,
-  ].join('\n');
+    `# WORLD CONTEXT\n${adventure.worldContext}`,
+    `# TONE\n${adventure.tone}`,
+    `# RULES\n${BEHAVIORAL_RULES}`,
+    '# ID REFERENCE (use these exact strings in tool calls)',
+    `## Locations\n${locationCatalog}`,
+    `## Items\n${itemCatalog}`,
+    `## NPCs\n${npcCatalog}`,
+    `## Quests\n${questCatalog}`,
+    `## Goals\n${goalCatalog}`,
+  ].join('\n\n');
 }
 
 export function buildUserContext(input: {
@@ -175,58 +196,106 @@ export function buildUserContext(input: {
   session: GameSession;
   action: ParsedAction;
   diceRoll?: DiceRoll;
+  secondaryRoll?: DiceRoll;
+  engineChanges?: StateChange[];
 }): string {
-  const { adventure, session, action, diceRoll } = input;
+  const { adventure, session, action, diceRoll, secondaryRoll, engineChanges } = input;
   const player = session.players.find((p) => p.id === session.currentTurnPlayerId);
   if (!player) throw new Error('Active player not found in session');
   const location = adventure.locations[player.currentLocationId];
   if (!location) throw new Error(`Location ${player.currentLocationId} not found`);
+
+  const playerSheet = formatCharacterSheet(player);
 
   const sectionSummaries = session.memoryState.sectionSummaries
     .map((s) => `[${s.locationId} visit ${s.visitIndex}] ${s.summary}`)
     .join('\n');
 
   const recentTurns = session.memoryState.activeTurns
-    .map(
-      (t) =>
-        `Turn ${t.turnNumber} (${t.playerId.slice(0, 8)}): "${t.playerInput}" → ${t.narrativeResponse}`,
-    )
+    .map((t) => `Turn ${t.turnNumber}: player said "${t.playerInput}" → ${t.narrativeResponse}`)
     .join('\n');
 
   const npcsHere = location.npcs
     .map((id) => adventure.npcs[id])
     .filter((n): n is NonNullable<typeof n> => Boolean(n))
-    .map((n) => `${n.name} (${n.id}) — ${n.personality}`)
+    .map((n) => {
+      const disposition = session.worldState.npcDispositions[n.id] ?? n.initialDisposition;
+      const defeated = session.worldState.defeatedNpcIds.includes(n.id);
+      const status = defeated ? 'DEFEATED' : disposition;
+      return `- ${n.name} (${n.id}) [${status}]: ${n.personality}`;
+    })
     .join('\n');
 
   const itemsHere = location.items
     .filter((g) => !session.worldState.collectedItemIds.includes(g.itemId))
     .map((g) => {
       const item = adventure.items[g.itemId];
-      return item ? `${item.name} (${item.id})` : g.itemId;
+      return item ? `- ${item.name} (${item.id})` : `- ${g.itemId}`;
     })
-    .join(', ');
+    .join('\n');
 
-  const diceContext = diceRoll
-    ? `\nDICE RESULT (authoritative — narrate this outcome): ${formatDiceRoll(diceRoll)}`
+  const diceLines: string[] = [];
+  if (diceRoll) diceLines.push(formatDiceRoll(diceRoll));
+  if (secondaryRoll) diceLines.push(formatDiceRoll(secondaryRoll));
+  const diceContext = diceLines.length
+    ? `\n\n# DICE RESULTS (authoritative — narrate these outcomes; do not re-roll)\n${diceLines.join('\n')}`
+    : '';
+
+  const engineChangesLines = (engineChanges ?? []).map((c) => formatEngineChange(c));
+  const engineChangesContext = engineChangesLines.length
+    ? `\n\n# ENGINE-DETERMINED FACTS (already applied — narrate, then call matching tool calls if appropriate)\n${engineChangesLines.join('\n')}`
     : '';
 
   return [
-    sectionSummaries ? `HISTORY SUMMARIES:\n${sectionSummaries}` : '',
-    recentTurns ? `RECENT TURNS:\n${recentTurns}` : '',
-    `CURRENT LOCATION: ${location.name}\n${location.atmosphericDescription}`,
-    npcsHere ? `NPCS PRESENT:\n${npcsHere}` : '',
-    itemsHere ? `ITEMS PRESENT: ${itemsHere}` : '',
-    `PLAYER ACTION: ${action.rawInput} (parsed as ${action.type})${diceContext}`,
+    `# ACTIVE PLAYER\n${playerSheet}`,
+    sectionSummaries ? `# HISTORY SUMMARIES\n${sectionSummaries}` : '',
+    recentTurns ? `# RECENT TURNS\n${recentTurns}` : '',
+    `# CURRENT LOCATION: ${location.name} (${location.id})\n${location.atmosphericDescription}`,
+    npcsHere ? `# NPCS HERE\n${npcsHere}` : '',
+    itemsHere ? `# ITEMS HERE\n${itemsHere}` : '',
+    `# PLAYER ACTION\nRaw input: "${action.rawInput}"\nParsed as: ${action.type}${diceContext}${engineChangesContext}`,
   ]
     .filter(Boolean)
     .join('\n\n');
 }
 
+function formatEngineChange(change: StateChange): string {
+  switch (change.type) {
+    case 'NPC_DEFEATED':
+      return `- NPC ${change.npcId} has been defeated.`;
+    case 'GOAL_COMPLETED':
+      return `- Goal ${change.goalId} has been completed.`;
+    case 'GAME_OVER':
+      return `- The game has ended in ${change.result}.`;
+    case 'HP_CHANGED':
+      return `- Player ${change.playerId} HP changed by ${change.delta} (now ${change.newValue}).`;
+    default:
+      return `- ${change.type}`;
+  }
+}
+
+function formatCharacterSheet(player: import('@loreforge/shared').PlayerState): string {
+  const inventoryLines = player.inventory.length
+    ? player.inventory
+        .map((i) => `  - ${i.itemId} (instanceId: ${i.instanceId}, qty: ${i.quantity})`)
+        .join('\n')
+    : '  (empty)';
+  return [
+    `playerId: ${player.id}`,
+    `name: ${player.name}`,
+    `class: ${player.characterClass.name}`,
+    `location: ${player.currentLocationId}`,
+    `HP: ${player.hp.current}/${player.hp.max}`,
+    `spells: ${player.spells.join(', ') || 'none'}`,
+    `active quests: ${player.activeQuestIds.join(', ') || 'none'}`,
+    `inventory:\n${inventoryLines}`,
+  ].join('\n');
+}
+
 function formatDiceRoll(roll: DiceRoll): string {
   const successPart = roll.success === undefined ? '' : roll.success ? ' [SUCCESS]' : ' [FAILURE]';
   const dcPart = roll.dc !== undefined ? ` vs DC ${roll.dc}` : '';
-  return `${roll.type} d${roll.die} [${roll.rolls.join(',')}] + ${roll.modifier} = ${roll.total}${dcPart}${successPart}`;
+  return `${roll.type}: d${roll.die} [${roll.rolls.join(',')}] + ${roll.modifier} = ${roll.total}${dcPart}${successPart}`;
 }
 
 export function buildNarrativePrompt(input: {
@@ -234,9 +303,11 @@ export function buildNarrativePrompt(input: {
   session: GameSession;
   action: ParsedAction;
   diceRoll?: DiceRoll;
+  secondaryRoll?: DiceRoll;
+  engineChanges?: StateChange[];
 }): NarrativePrompt {
   return {
-    systemPrompt: buildSystemPrompt(input.adventure, input.session),
+    systemPrompt: buildSystemPrompt(input.adventure),
     userContext: buildUserContext(input),
     toolDefinitions: NARRATOR_TOOL_DEFINITIONS,
   };

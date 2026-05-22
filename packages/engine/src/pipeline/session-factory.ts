@@ -61,6 +61,7 @@ export function createSession(input: CreateSessionInput): GameSession {
         Object.values(input.adventure.npcs).map((n) => [n.id, n.initialDisposition]),
       ),
       npcMemories: {},
+      npcHp: {},
     },
     memoryState: {
       activeTurns: [],

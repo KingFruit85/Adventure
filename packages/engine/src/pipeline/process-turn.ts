@@ -1,4 +1,11 @@
-import type { DiceRoll, GameSession, StateChange, TurnEntry } from '@loreforge/shared';
+import type {
+  AdventureDefinition,
+  DiceRoll,
+  GameSession,
+  ParsedAction,
+  StateChange,
+  TurnEntry,
+} from '@loreforge/shared';
 import type { EngineDependencies } from '../deps.js';
 import { rollAttack, rollDamage } from './dice-resolver.js';
 import { updateMemory } from './memory-manager.js';
@@ -20,18 +27,25 @@ export interface ProcessTurnResult {
   validationError?: string;
   rollResult?: DiceRoll;
   /**
-   * Promise that resolves once memory-manager background work (blob append,
-   * section summarisation) completes. Awaiting is optional in production —
-   * the result is already returned — but tests and shutdown paths should
-   * drain it.
+   * Resolves once memory-manager background work (blob append + summarisation
+   * + save) completes. Production callers can ignore; tests should await
+   * before asserting on persisted state.
    */
   backgroundWork?: Promise<void>;
 }
 
 /**
- * The 7-stage pipeline from ARCHITECTURE.md §4.2, orchestrated as a single
- * async function. Each stage is a pure or near-pure operation; this function
- * does the IO (loading, persisting) and chains them together.
+ * The 7-stage pipeline from ARCHITECTURE.md §4.2.
+ *
+ * Division of authority:
+ *   - Engine resolves dice and decides mechanical outcomes (hit/miss,
+ *     damage, NPC defeat). These emit StateChange events before the LLM
+ *     speaks.
+ *   - LLM narrates prose and emits descriptive StateChange events via tool
+ *     calls (player_moved on a successful MOVE, item_added on TAKE_ITEM,
+ *     npc_spoke on TALK_TO_NPC, etc.).
+ *   - The two sets of changes are merged: engine first (settled facts),
+ *     then LLM additions.
  */
 export async function processTurn(
   input: ProcessTurnInput,
@@ -54,7 +68,7 @@ export async function processTurn(
     allowedActions: player.characterClass.availableActions,
   });
 
-  // Stage 2: validate against rules
+  // Stage 2: validate
   const validation = validateAction(action, session, adventure);
   if (!validation.valid) {
     return {
@@ -65,73 +79,30 @@ export async function processTurn(
     };
   }
 
-  // Stage 3: resolve dice (only for combat actions in PoC)
-  let diceRoll: DiceRoll | undefined;
-  if (action.params.type === 'ATTACK') {
-    const target = adventure.npcs[action.params.targetNpcId];
-    if (target?.combatStats) {
-      const attackRoll = rollAttack({
-        attackBonus: 2, // placeholder until class/weapon math is wired up
-        targetAc: target.combatStats.ac,
-      });
-      if (attackRoll.success) {
-        const damage = rollDamage({
-          damageDie: 6,
-          damageBonus: 1,
-        });
-        diceRoll = { ...attackRoll, total: attackRoll.total };
-        // Damage is applied via state changes below.
-        // For Phase 1, attribute damage directly here so the test loop sees HP move.
-        // Phase 2 lets the LLM narrate damage application via hp_changed tool calls.
-        const npcDefeated = damage.total >= target.combatStats.hp;
-        const stub: StateChange[] = npcDefeated ? [{ type: 'NPC_DEFEATED', npcId: target.id }] : [];
-        const turnNumber = session.memoryState.activeTurns.length;
-        const previousLocationId = player.currentLocationId;
-        const stateChanges = stub;
-        const apply = applyStateChanges(session, stateChanges, { adventure, turnNumber });
-        const narrativeText = npcDefeated
-          ? `You strike ${target.name} down.`
-          : `You wound ${target.name}, but it still stands.`;
-        const turnEntry: TurnEntry = {
-          turnNumber,
-          playerId: input.playerId,
-          playerInput: input.rawInput,
-          narrativeResponse: narrativeText,
-          stateChanges,
-          timestamp: new Date().toISOString(),
-        };
-        const { session: nextSession, backgroundWork } = await updateMemory(
-          apply.session,
-          turnEntry,
-          { adventure, previousLocationId },
-          { blob: deps.blobStore, llm: deps.llmProvider },
-        );
-        await deps.sessionStore.update(nextSession);
-        return {
-          narrative: narrativeText,
-          stateChanges,
-          updatedSession: nextSession,
-          rollResult: diceRoll,
-          backgroundWork,
-        };
-      }
-      diceRoll = attackRoll;
-    }
-  }
-
-  // Stages 4–5: build prompt and stream narrative
+  // Stage 3: resolve dice + engine-determined consequences
   const turnNumber = session.memoryState.activeTurns.length;
   const previousLocationId = player.currentLocationId;
-  const prompt = buildNarrativePrompt({ adventure, session, action, diceRoll });
-  const { narrative, stateChanges } = await narrate(
+  const { diceRoll, secondaryRoll, engineChanges } = resolveDice(action, adventure, session);
+
+  // Stages 4–5: build prompt and stream narrative
+  const prompt = buildNarrativePrompt({
+    adventure,
+    session,
+    action,
+    diceRoll,
+    secondaryRoll,
+    engineChanges,
+  });
+  const { narrative, stateChanges: llmChanges } = await narrate(
     { prompt, action, session, adventure, turnNumber },
     deps.llmProvider,
   );
 
-  // Stage 6: apply state changes
-  const apply = applyStateChanges(session, stateChanges, { adventure, turnNumber });
+  // Stage 6: merge + apply
+  const allChanges: StateChange[] = [...engineChanges, ...llmChanges];
+  const apply = applyStateChanges(session, allChanges, { adventure, turnNumber });
 
-  // Stage 7: memory (sync part returns immediately; async part runs in background)
+  // Stage 7: memory (background work persists summaries when location changes)
   const turnEntry: TurnEntry = {
     turnNumber,
     playerId: input.playerId,
@@ -144,7 +115,11 @@ export async function processTurn(
     apply.session,
     turnEntry,
     { adventure, previousLocationId },
-    { blob: deps.blobStore, llm: deps.llmProvider },
+    {
+      blob: deps.blobStore,
+      llm: deps.llmProvider,
+      saveUpdatedSession: (s) => deps.sessionStore.update(s),
+    },
   );
 
   await deps.sessionStore.update(nextSession);
@@ -156,4 +131,51 @@ export async function processTurn(
     rollResult: diceRoll,
     backgroundWork,
   };
+}
+
+interface DiceResolution {
+  diceRoll?: DiceRoll;
+  secondaryRoll?: DiceRoll;
+  engineChanges: StateChange[];
+}
+
+function resolveDice(
+  action: ParsedAction,
+  adventure: AdventureDefinition,
+  session: GameSession,
+): DiceResolution {
+  const engineChanges: StateChange[] = [];
+  if (action.params.type !== 'ATTACK') {
+    return { engineChanges };
+  }
+  const target = adventure.npcs[action.params.targetNpcId];
+  if (!target?.combatStats) return { engineChanges };
+
+  const attackRoll = rollAttack({
+    attackBonus: 2, // PoC: flat bonus; class/weapon math is future work
+    targetAc: target.combatStats.ac,
+  });
+
+  if (!attackRoll.success) {
+    return { diceRoll: attackRoll, engineChanges };
+  }
+
+  const damage = rollDamage({ damageDie: 6, damageBonus: 1 });
+  const currentHp = session.worldState.npcHp[target.id] ?? target.combatStats.hp;
+  const newHp = currentHp - damage.total;
+  engineChanges.push({ type: 'NPC_HP_CHANGED', npcId: target.id, newHp });
+
+  if (newHp <= 0) {
+    engineChanges.push({ type: 'NPC_DEFEATED', npcId: target.id });
+    for (const goal of Object.values(adventure.goals)) {
+      if (goal.type === 'DEFEAT_NPC' && goal.targetId === target.id) {
+        engineChanges.push({ type: 'GOAL_COMPLETED', goalId: goal.id });
+        if (goal.isEndGame && goal.endGameType) {
+          engineChanges.push({ type: 'GAME_OVER', result: goal.endGameType });
+        }
+      }
+    }
+  }
+
+  return { diceRoll: attackRoll, secondaryRoll: damage, engineChanges };
 }

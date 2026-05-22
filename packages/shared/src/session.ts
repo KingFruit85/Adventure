@@ -53,6 +53,13 @@ export const WorldStateSchema = z.object({
   visitedLocationIds: z.array(z.string()),
   npcDispositions: z.record(z.string(), DispositionSchema),
   npcMemories: z.record(z.string(), NPCMemorySchema),
+  /**
+   * Current HP per NPC. Initialized lazily on first damage — if an NPC ID is
+   * absent here, callers should fall back to the static `combatStats.hp`
+   * defined on the adventure. Phase 2 extension beyond ARCHITECTURE.md §3.2;
+   * needed so multi-hit combat actually resolves.
+   */
+  npcHp: z.record(z.string(), z.number().int()),
 });
 export type WorldState = z.infer<typeof WorldStateSchema>;
 
@@ -79,6 +86,11 @@ export const StateChangeSchema = z.discriminatedUnion('type', [
     newDurability: z.number().int().nonnegative(),
   }),
   z.object({ type: z.literal('NPC_DEFEATED'), npcId: z.string() }),
+  z.object({
+    type: z.literal('NPC_HP_CHANGED'),
+    npcId: z.string(),
+    newHp: z.number().int(),
+  }),
   z.object({
     type: z.literal('NPC_DISPOSITION_CHANGED'),
     npcId: z.string(),

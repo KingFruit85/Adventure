@@ -21,10 +21,11 @@ export interface NarrateInput {
 }
 
 /**
- * Phase 1 narrator. Streams from an LLMProvider, collects text deltas into a
- * full narrative string, and translates tool calls into engine StateChange
- * events. In Phase 1 the StubLLMProvider returns canned text; in Phase 2 the
- * real AnthropicProvider plugs in here without changing this orchestration.
+ * Streams from an LLMProvider, collects text deltas into the narrative
+ * string, and translates each tool call into an engine StateChange.
+ *
+ * Claude's tool calls are the canonical record of what happened — the
+ * narrator never invents state changes that weren't signalled this way.
  */
 export async function narrate(input: NarrateInput, llm: LLMProvider): Promise<NarrateResult> {
   const stateChanges: StateChange[] = [];
@@ -37,13 +38,6 @@ export async function narrate(input: NarrateInput, llm: LLMProvider): Promise<Na
       const change = toolCallToStateChange(chunk.toolCall, input);
       if (change) stateChanges.push(change);
     }
-  }
-
-  // Phase 1: when running with StubLLMProvider, the engine still needs the
-  // structural state changes that the action would produce, so the pipeline
-  // can be verified end-to-end. Synthesise them deterministically here.
-  if (stateChanges.length === 0) {
-    stateChanges.push(...synthesizeChangesForStub(input));
   }
 
   return { narrative: narrative.trim(), stateChanges };
@@ -132,47 +126,5 @@ function toolCallToStateChange(
     }
     default:
       return null;
-  }
-}
-
-/**
- * Phase 1 only: synthesise the structural state change implied by the player's
- * action so the rest of the pipeline can be exercised before the LLM is wired
- * up. Phase 2 removes this and lets Claude's tool calls drive state.
- */
-function synthesizeChangesForStub(ctx: NarrateInput): StateChange[] {
-  const player = ctx.session.players.find((p) => p.id === ctx.session.currentTurnPlayerId);
-  if (!player) return [];
-  const location = ctx.adventure.locations[player.currentLocationId];
-  if (!location) return [];
-
-  switch (ctx.action.params.type) {
-    case 'MOVE': {
-      const direction = ctx.action.params.direction.toLowerCase();
-      const exit = location.exits.find((e) => e.direction.toLowerCase() === direction);
-      if (!exit) return [];
-      return [{ type: 'PLAYER_MOVED', playerId: player.id, toLocationId: exit.toLocationId }];
-    }
-    case 'TAKE_ITEM': {
-      const itemId = ctx.action.params.itemId;
-      const itemDef = ctx.adventure.items[itemId];
-      return [
-        {
-          type: 'ITEM_ADDED',
-          playerId: player.id,
-          item: {
-            instanceId: randomUUID(),
-            itemId,
-            quantity: 1,
-            acquiredAtTurn: ctx.turnNumber,
-            durability: itemDef?.maxDurability,
-            charges: itemDef?.maxCharges,
-            acquiredFromId: player.currentLocationId,
-          },
-        },
-      ];
-    }
-    default:
-      return [];
   }
 }

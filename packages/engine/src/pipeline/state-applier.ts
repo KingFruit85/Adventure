@@ -98,6 +98,12 @@ function applyOne(
         defeatedNpcIds: addUnique(w.defeatedNpcIds, change.npcId),
       }));
 
+    case 'NPC_HP_CHANGED':
+      return mutWorld(session, (w) => ({
+        ...w,
+        npcHp: { ...w.npcHp, [change.npcId]: change.newHp },
+      }));
+
     case 'NPC_DISPOSITION_CHANGED':
       return mutWorld(session, (w) => ({
         ...w,
