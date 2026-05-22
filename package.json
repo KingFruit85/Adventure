@@ -8,9 +8,9 @@
   },
   "packageManager": "pnpm@11.2.2",
   "scripts": {
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
+    "build": "turbo run build --filter=@loreforge/*",
+    "test": "turbo run test --filter=@loreforge/*",
+    "typecheck": "turbo run typecheck --filter=@loreforge/*",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."
   },

@@ -21,19 +21,24 @@ export interface NarrateInput {
 }
 
 /**
- * Streams from an LLMProvider, collects text deltas into the narrative
- * string, and translates each tool call into an engine StateChange.
+ * Streams from an LLMProvider as a generator. Yields each text delta as it
+ * arrives so the pipeline can surface it to SSE consumers in real time, then
+ * returns the accumulated narrative + state changes once the stream is done.
  *
  * Claude's tool calls are the canonical record of what happened — the
  * narrator never invents state changes that weren't signalled this way.
  */
-export async function narrate(input: NarrateInput, llm: LLMProvider): Promise<NarrateResult> {
+export async function* narrateStream(
+  input: NarrateInput,
+  llm: LLMProvider,
+): AsyncGenerator<string, NarrateResult, void> {
   const stateChanges: StateChange[] = [];
   let narrative = '';
 
   for await (const chunk of llm.streamNarrative(input.prompt)) {
     if (chunk.type === 'text_delta' && chunk.textDelta) {
       narrative += chunk.textDelta;
+      yield chunk.textDelta;
     } else if (chunk.type === 'tool_call' && chunk.toolCall) {
       const change = toolCallToStateChange(chunk.toolCall, input);
       if (change) stateChanges.push(change);
