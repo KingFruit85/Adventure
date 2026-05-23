@@ -11,10 +11,15 @@ describe('useVoiceOutput', () => {
 
   beforeEach(() => {
     calls = [];
-    // Patch speechSynthesis with a minimal capturing mock.
+    // Patch speechSynthesis with a minimal capturing mock. getVoices and the
+    // voiceschanged listener are noop'd — the hook's voice-availability
+    // logging is for browser debugging, not assertion targets.
     (globalThis as { speechSynthesis: unknown }).speechSynthesis = {
       speak: (u: { text: string }) => calls.push({ text: u.text }),
       cancel: () => {},
+      getVoices: () => [],
+      addEventListener: () => {},
+      removeEventListener: () => {},
     } as never;
     function FakeUtterance(this: { text: string }, text: string) {
       this.text = text;
