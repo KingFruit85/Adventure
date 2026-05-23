@@ -40,14 +40,34 @@ async function expectOk(res: Response): Promise<Response> {
   return res;
 }
 
+/**
+ * Wraps fetch errors. Browser fetch throws `TypeError: Failed to fetch` on
+ * network failure (server down, DNS, CORS) — surface a player-friendly hint
+ * so a stopped backend doesn't show up as a cryptic TypeError in the UI.
+ */
+async function fetchOrFriendly(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error(
+        'Cannot reach the LoreForge API. Is it running? (`pnpm dev` at the repo root starts both API and web.)',
+      );
+    }
+    throw err;
+  }
+}
+
 export async function listAdventures(): Promise<AdventureMetadata[]> {
-  const res = await fetch('/adventures', { headers: headers() });
+  const res = await fetchOrFriendly('/adventures', { headers: headers() });
   await expectOk(res);
   return res.json() as Promise<AdventureMetadata[]>;
 }
 
 export async function getAdventure(id: string): Promise<AdventureDefinition> {
-  const res = await fetch(`/adventures/${encodeURIComponent(id)}`, { headers: headers() });
+  const res = await fetchOrFriendly(`/adventures/${encodeURIComponent(id)}`, {
+    headers: headers(),
+  });
   await expectOk(res);
   return res.json() as Promise<AdventureDefinition>;
 }
@@ -63,7 +83,7 @@ export interface CreateSessionResult {
 }
 
 export async function createSession(params: CreateSessionParams): Promise<CreateSessionResult> {
-  const res = await fetch('/sessions', {
+  const res = await fetchOrFriendly('/sessions', {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(params),
@@ -73,14 +93,16 @@ export async function createSession(params: CreateSessionParams): Promise<Create
 }
 
 export async function getSessionByCode(code: string): Promise<GameSession> {
-  const res = await fetch(`/sessions/${encodeURIComponent(code)}`, { headers: headers() });
+  const res = await fetchOrFriendly(`/sessions/${encodeURIComponent(code)}`, {
+    headers: headers(),
+  });
   await expectOk(res);
   const body = (await res.json()) as { session: GameSession };
   return body.session;
 }
 
 export async function listMySessions(): Promise<SessionSummary[]> {
-  const res = await fetch('/device-sessions', { headers: headers() });
+  const res = await fetchOrFriendly('/device-sessions', { headers: headers() });
   await expectOk(res);
   return res.json() as Promise<SessionSummary[]>;
 }
@@ -95,7 +117,7 @@ export async function* streamTurn(
   body: { playerId: string; input: string },
   signal?: AbortSignal,
 ): AsyncGenerator<TurnEvent, void, void> {
-  const res = await fetch(`/sessions/${encodeURIComponent(code)}/turn`, {
+  const res = await fetchOrFriendly(`/sessions/${encodeURIComponent(code)}/turn`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
