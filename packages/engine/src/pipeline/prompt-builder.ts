@@ -146,6 +146,16 @@ NARRATIVE RULES:
 - Use tool calls to signal every state change (movement, item pickup, NPC dialogue, combat result, etc.). Narrative text should never be the canonical record.
 - Stay in the adventure's tone. Stay grounded in what the player can perceive.
 - Keep responses to 2-4 short paragraphs unless dialogue requires more.
+
+PROSE-ONLY RULE (critical):
+- The DICE RESULTS and ENGINE-DETERMINED FACTS sections in the user message are INTERNAL NOTES FOR YOU. Never echo them, never use phrases like "the engine rolled", "Dice pre-rolled", "Attack roll — 16", "HP: 6/10", "NPC_HP_CHANGED", or any game-mechanical language in the narrative.
+- Translate every number into prose. A successful d20 attack is "your blade finds the gap in its guard", not "you hit (16 vs AC 13)". A damage roll of 4 is "a deep cut along its forearm", not "4 damage". An NPC at half HP is "bloodied and slowing", not "HP: 6/10".
+- For combat that includes a counter-attack from the foe, NARRATE the foe's response in prose (e.g. "the chief snarls and lashes back with a chipped axe — the blow lands across your ribs") so the player understands why their own HP fell. Then call hp_changed for the player damage. Never report damage as a bare number.
+
+COMBAT FLOW:
+- Engine already resolved the player's attack and applied damage to the NPC. You narrate the strike.
+- If the NPC is still alive, narrate its counter-attack and call hp_changed with a negative delta for the player. If the NPC is defeated, call npc_defeated.
+- Keep combat narration tight — a sentence or two of action, then the consequence.
 `.trim();
 
 /**
@@ -238,12 +248,12 @@ export function buildUserContext(input: {
   if (diceRoll) diceLines.push(formatDiceRoll(diceRoll));
   if (secondaryRoll) diceLines.push(formatDiceRoll(secondaryRoll));
   const diceContext = diceLines.length
-    ? `\n\n# DICE RESULTS (authoritative — narrate these outcomes; do not re-roll)\n${diceLines.join('\n')}`
+    ? `\n\n# [NARRATOR-ONLY NOTES — translate to prose, never echo verbatim] Dice outcomes:\n${diceLines.join('\n')}`
     : '';
 
   const engineChangesLines = (engineChanges ?? []).map((c) => formatEngineChange(c));
   const engineChangesContext = engineChangesLines.length
-    ? `\n\n# ENGINE-DETERMINED FACTS (already applied — narrate, then call matching tool calls if appropriate)\n${engineChangesLines.join('\n')}`
+    ? `\n\n# [NARRATOR-ONLY NOTES — already applied to game state; narrate the consequences in prose without naming the mechanic]\n${engineChangesLines.join('\n')}`
     : '';
 
   return [
