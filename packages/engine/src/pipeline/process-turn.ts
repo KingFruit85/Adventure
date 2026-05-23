@@ -87,8 +87,14 @@ async function* runTurnPipeline(
     return {};
   }
 
-  // Stage 3: dice + engine-determined consequences
-  const turnNumber = session.memoryState.activeTurns.length;
+  // Stage 3: dice + engine-determined consequences. Monotonic turn counter:
+  // `activeTurns.length` was an OK proxy until the active window started
+  // getting trimmed (default 10) — after that, the counter froze at 10 and
+  // every subsequent turn re-used the same number. Derive from the most-
+  // recent turn's number instead so it keeps climbing even when the window
+  // is trimmed or reset on location change.
+  const lastTurn = session.memoryState.activeTurns[session.memoryState.activeTurns.length - 1];
+  const turnNumber = lastTurn ? lastTurn.turnNumber + 1 : 0;
   const previousLocationId = player.currentLocationId;
   const { diceRoll, secondaryRoll, engineChanges } = resolveDice(action, adventure, session);
   if (diceRoll) yield { type: 'roll_result', roll: diceRoll };

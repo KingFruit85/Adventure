@@ -114,12 +114,17 @@ export const NARRATOR_TOOL_DEFINITIONS: NarratorToolDefinition[] = [
   },
   {
     name: 'hp_changed',
-    description: "Call when a player's HP changes. Engine clamps to max.",
+    description:
+      "Call ONLY when the PLAYER's HP changes — e.g. the player took damage from a foe's counter-attack, used a healing item, etc. NEVER call this for NPC damage. NPC HP is handled by the engine automatically. NEVER reuse the damage number from the player's own attack as the player's hp_changed delta. A typical goblin hit on the player is 1-3 damage (delta -1 to -3); large monsters can do more. Only call if you narratively described the player being struck or healed in this turn.",
     input_schema: {
       type: 'object',
       properties: {
         playerId: { type: 'string' },
-        delta: { type: 'number' },
+        delta: {
+          type: 'number',
+          description:
+            'Signed change to PLAYER HP. Negative for damage taken (e.g. -2), positive for healing.',
+        },
       },
       required: ['playerId', 'delta'],
     },
@@ -148,13 +153,15 @@ NARRATIVE RULES:
 - Keep responses to 2-4 short paragraphs unless dialogue requires more.
 
 PROSE-ONLY RULE (critical):
-- The DICE RESULTS and ENGINE-DETERMINED FACTS sections in the user message are INTERNAL NOTES FOR YOU. Never echo them, never use phrases like "the engine rolled", "Dice pre-rolled", "Attack roll — 16", "HP: 6/10", "NPC_HP_CHANGED", or any game-mechanical language in the narrative.
-- Translate every number into prose. A successful d20 attack is "your blade finds the gap in its guard", not "you hit (16 vs AC 13)". A damage roll of 4 is "a deep cut along its forearm", not "4 damage". An NPC at half HP is "bloodied and slowing", not "HP: 6/10".
-- For combat that includes a counter-attack from the foe, NARRATE the foe's response in prose (e.g. "the chief snarls and lashes back with a chipped axe — the blow lands across your ribs") so the player understands why their own HP fell. Then call hp_changed for the player damage. Never report damage as a bare number.
+- The narrator-only notes in the user message (dice outcomes, engine-determined state changes) are INTERNAL NOTES FOR YOU. Never echo them, never use phrases like "the engine rolled", "Dice pre-rolled", "Attack roll 16", health-bar readouts like 6/10, raw state-change names, or any game-mechanical language in the narrative.
+- Translate every number into prose. A successful d20 attack is "your blade finds the gap in its guard", not a hit/miss readout with bonuses. A damage roll of 4 is "a deep cut along its forearm", not "4 damage". An NPC at half health is "bloodied and slowing", not a bare numerical fraction.
+- For combat that includes a counter-attack from the foe, NARRATE the foe's response in prose (e.g. "the chief snarls and lashes back with a chipped axe — the blow lands across your ribs") so the player understands why their own health fell. Then call hp_changed for the player damage. Never report damage as a bare number.
 
 COMBAT FLOW:
-- Engine already resolved the player's attack and applied damage to the NPC. You narrate the strike.
-- If the NPC is still alive, narrate its counter-attack and call hp_changed with a negative delta for the player. If the NPC is defeated, call npc_defeated.
+- Engine already resolved the player's attack and applied damage to the NPC (you'll see NPC_HP_CHANGED in the narrator-only notes). You narrate the strike in prose.
+- The engine's reported damage number is the damage the PLAYER dealt to the NPC. It is NOT damage the player took. Do NOT call hp_changed using that number.
+- If you choose to have the foe counter-attack in your narration, pick a small reasonable damage value for the player (typically 1-3 for a goblin, 2-5 for a larger foe) and call hp_changed with that as a negative delta. ONLY emit hp_changed if your prose actually describes the player being struck.
+- If the foe is defeated by the player's attack, narrate the killing blow. Engine handles npc_defeated and goal_completed automatically — you don't need to emit them.
 - Keep combat narration tight — a sentence or two of action, then the consequence.
 `.trim();
 
