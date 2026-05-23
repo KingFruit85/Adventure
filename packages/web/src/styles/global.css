@@ -1,0 +1,315 @@
+:root {
+  --color-bg: #0c0a08;
+  --color-bg-elevated: #15110d;
+  --color-bg-panel: #1a1611;
+  --color-border: #2a221a;
+  --color-border-strong: #3a3024;
+  --color-text: #d8c8a8;
+  --color-text-dim: #8a7d65;
+  --color-text-muted: #6b5e4a;
+  --color-accent: #d4a04a;
+  --color-accent-soft: #8a6a30;
+  --color-danger: #a85040;
+  --color-success: #6a8050;
+
+  --font-narrative: "Iowan Old Style", "Georgia", "Garamond", serif;
+  --font-ui: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+
+  --radius: 4px;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-narrative);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--space-md) 0;
+}
+h1 {
+  font-size: 32px;
+  line-height: 1.2;
+}
+h2 {
+  font-size: 22px;
+}
+h3 {
+  font-size: 18px;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: var(--font-ui);
+  font-weight: 500;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  background-color: var(--color-bg-panel);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+button:hover:not(:disabled) {
+  border-color: var(--color-accent-soft);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+button.primary {
+  background-color: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-bg);
+  font-weight: 500;
+}
+button.primary:hover:not(:disabled) {
+  background-color: var(--color-accent);
+}
+button.danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+  outline: none;
+  transition: border-color 120ms ease;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-accent);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+}
+.app-header .brand {
+  font-family: var(--font-narrative);
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  color: var(--color-accent);
+}
+.app-header .brand-sub {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.container {
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-lg);
+}
+.container.narrow {
+  max-width: 600px;
+}
+
+.card {
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.dim {
+  color: var(--color-text-dim);
+}
+.error {
+  color: var(--color-danger);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* ----- Home page ------- */
+
+.adventure-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+.adventure-card:hover {
+  border-color: var(--color-accent-soft);
+}
+
+/* ----- Game page ------- */
+
+.game-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: var(--space-lg);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+  min-height: calc(100vh - 60px);
+}
+@media (max-width: 900px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.narrative {
+  font-family: var(--font-narrative);
+  font-size: 18px;
+  line-height: 1.7;
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-lg);
+  min-height: 200px;
+  white-space: pre-wrap;
+  position: relative;
+}
+.narrative.streaming::after {
+  content: "▍";
+  color: var(--color-accent);
+  animation: blink 1s steps(2, end) infinite;
+  margin-left: 2px;
+}
+@keyframes blink {
+  to {
+    opacity: 0;
+  }
+}
+
+.action-input {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+.action-input input {
+  flex: 1;
+  font-size: 16px;
+}
+.voice-button {
+  width: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.voice-button.active {
+  background-color: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.status-panel h3 {
+  margin-top: var(--space-lg);
+}
+.status-panel h3:first-child {
+  margin-top: 0;
+}
+.hp-bar {
+  height: 10px;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.hp-bar-fill {
+  height: 100%;
+  background-color: var(--color-danger);
+  transition: width 240ms ease;
+}
+.inventory-list,
+.quest-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-sm) 0 0 0;
+  font-size: 13px;
+}
+.inventory-list li,
+.quest-list li {
+  padding: 2px 0;
+  color: var(--color-text-dim);
+}
+
+.dice {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-accent-soft);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+  margin-top: var(--space-md);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-accent);
+}
+.dice.failure {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}

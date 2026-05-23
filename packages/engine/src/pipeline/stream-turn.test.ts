@@ -10,8 +10,8 @@ import type { EngineDependencies } from '../deps.js';
 import { MockLLMProvider } from '../llm/mock-provider.js';
 import { SQLiteSessionStore } from '../session-store/sqlite.js';
 import { KeywordIntentClassifier } from './intent-parser.js';
-import { createSession } from './session-factory.js';
 import { streamTurn } from './process-turn.js';
+import { createSession } from './session-factory.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ADVENTURES_DIR = resolve(__dirname, '../../../../adventures');
