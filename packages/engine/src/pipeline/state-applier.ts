@@ -60,6 +60,15 @@ function applyOne(
 
     case 'ITEM_ADDED': {
       const itemDef = ctx.adventure.items[change.item.itemId];
+      // Engine guard: the LLM can emit item_added_to_inventory while narrating
+      // an EXAMINE / LOOK / MOVE turn, hallucinating an item the player
+      // already owns. For non-stackable items (most quest items, weapons),
+      // refuse to add if the itemId has already been collected anywhere in
+      // this session. Stackable items still accumulate normally.
+      const alreadyCollected = session.worldState.collectedItemIds.includes(change.item.itemId);
+      if (alreadyCollected && itemDef && !itemDef.isStackable) {
+        return session;
+      }
       const instance: InventoryItem = {
         ...change.item,
         instanceId: change.item.instanceId || randomUUID(),

@@ -4,6 +4,7 @@ import { ActionInput } from '../components/ActionInput.js';
 import { DiceAnimation } from '../components/DiceAnimation.js';
 import { NarrativeDisplay } from '../components/NarrativeDisplay.js';
 import { PlayerStatus } from '../components/PlayerStatus.js';
+import { TurnChanges } from '../components/TurnChanges.js';
 import { useTurn } from '../hooks/useTurn.js';
 import { getAdventure, getSessionByCode } from '../lib/api-client.js';
 import { useSessionStore } from '../stores/sessionStore.js';
@@ -79,10 +80,11 @@ export function Game() {
         <NarrativeDisplay
           text={turn.narrative}
           streaming={turn.streaming}
-          error={turn.validationError && !turn.streaming ? null : null}
+          error={!turn.streaming ? turn.validationError : null}
         />
 
         <DiceAnimation roll={turn.lastRoll} />
+        <TurnChanges changes={turn.changes} adventure={adventure} />
 
         <ActionInput
           onSubmit={(input) => turn.submit(activePlayer.id, input)}

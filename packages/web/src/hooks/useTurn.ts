@@ -13,7 +13,7 @@ export interface TurnState {
   validationError: string | null;
   /** Most recent dice roll for this turn (if any). */
   lastRoll: DiceRoll | null;
-  /** State changes applied this turn, in order. */
+  /** Final state changes applied this turn (from turn_complete). */
   changes: StateChange[];
 }
 

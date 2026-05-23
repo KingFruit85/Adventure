@@ -313,3 +313,23 @@ select:focus {
   border-color: var(--color-danger);
   color: var(--color-danger);
 }
+
+.turn-changes {
+  list-style: none;
+  padding: var(--space-sm) var(--space-md);
+  margin: var(--space-md) 0 0 0;
+  background-color: var(--color-bg);
+  border-left: 2px solid var(--color-accent-soft);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.turn-changes li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
