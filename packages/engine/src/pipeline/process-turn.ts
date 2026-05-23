@@ -120,8 +120,19 @@ async function* runTurnPipeline(
     yield { type: 'text_delta', delta: r.value };
   }
 
-  // Stage 6: merge + apply
-  const allChanges: StateChange[] = [...engineChanges, ...llmChanges];
+  // Stage 6: merge + apply. Before applying, sweep LLM-emitted changes for
+  // any NPC_INTERACTION_RECORDED entries — if the player conversed with an
+  // NPC that grants a quest, ensure QUEST_STARTED fires even when the
+  // haiku classifier labelled the action as EXAMINE or LOOK rather than
+  // TALK_TO_NPC. The auto-grant respects idempotency in the same way
+  // resolveDialogQuestGrant does.
+  const postNarrateQuestGrants = derivePostNarrateQuestGrants(
+    llmChanges,
+    adventure,
+    session,
+    engineChanges,
+  );
+  const allChanges: StateChange[] = [...engineChanges, ...postNarrateQuestGrants, ...llmChanges];
   const apply = applyStateChanges(session, allChanges, { adventure, turnNumber });
   for (const change of apply.appliedChanges) {
     yield { type: 'state_change', change };
@@ -266,16 +277,52 @@ interface DiceResolution {
   engineChanges: StateChange[];
 }
 
+/**
+ * Resolves engine-authoritative consequences of an action: dice rolls,
+ * combat outcomes, automatic quest starts. The LLM still narrates and may
+ * emit additional state changes via tool calls; engine changes apply first.
+ */
 function resolveDice(
   action: ParsedAction,
   adventure: AdventureDefinition,
   session: GameSession,
 ): DiceResolution {
-  const engineChanges: StateChange[] = [];
-  if (action.params.type !== 'ATTACK') {
-    return { engineChanges };
+  switch (action.params.type) {
+    case 'ATTACK':
+      return resolveCombatAttack(action.params.targetNpcId, adventure, session, {
+        damageDie: 6,
+        damageBonus: 1,
+      });
+    case 'CAST_SPELL':
+      // PoC: spells with an NPC target work like a ranged attack with
+      // slightly stronger damage. A full spell catalog (varied dice, status
+      // effects, save-or-suck) is future work.
+      if (!action.params.targetId) return { engineChanges: [] };
+      if (!adventure.npcs[action.params.targetId]) return { engineChanges: [] };
+      return resolveCombatAttack(action.params.targetId, adventure, session, {
+        damageDie: 10,
+        damageBonus: 2,
+      });
+    case 'TALK_TO_NPC':
+      return { engineChanges: resolveDialogQuestGrant(action.params.npcId, adventure, session) };
+    default:
+      return { engineChanges: [] };
   }
-  const target = adventure.npcs[action.params.targetNpcId];
+}
+
+interface CombatProfile {
+  damageDie: number;
+  damageBonus: number;
+}
+
+function resolveCombatAttack(
+  targetNpcId: string,
+  adventure: AdventureDefinition,
+  session: GameSession,
+  profile: CombatProfile,
+): DiceResolution {
+  const engineChanges: StateChange[] = [];
+  const target = adventure.npcs[targetNpcId];
   if (!target?.combatStats) return { engineChanges };
 
   const attackRoll = rollAttack({
@@ -287,7 +334,10 @@ function resolveDice(
     return { diceRoll: attackRoll, engineChanges };
   }
 
-  const damage = rollDamage({ damageDie: 6, damageBonus: 1 });
+  const damage = rollDamage({
+    damageDie: profile.damageDie,
+    damageBonus: profile.damageBonus,
+  });
   const currentHp = session.worldState.npcHp[target.id] ?? target.combatStats.hp;
   const newHp = currentHp - damage.total;
   engineChanges.push({ type: 'NPC_HP_CHANGED', npcId: target.id, newHp });
@@ -305,4 +355,68 @@ function resolveDice(
   }
 
   return { diceRoll: attackRoll, secondaryRoll: damage, engineChanges };
+}
+
+/**
+ * If the player is talking to an NPC that grants a quest, the engine
+ * auto-emits QUEST_STARTED. The LLM still produces the NPC's actual words
+ * and may call npc_spoke for memory; the engine guarantees the quest
+ * progresses even if the LLM forgets the matching tool call.
+ *
+ * Idempotent: state-applier dedups via addUnique, so repeated dialog with
+ * the same NPC won't re-grant the quest.
+ */
+function resolveDialogQuestGrant(
+  npcId: string,
+  adventure: AdventureDefinition,
+  session: GameSession,
+): StateChange[] {
+  const npc = adventure.npcs[npcId];
+  if (!npc?.givesQuestId) return [];
+  if (session.worldState.activeQuestIds.includes(npc.givesQuestId)) return [];
+  const quest = adventure.quests[npc.givesQuestId];
+  if (quest && session.worldState.completedGoalIds.includes(quest.completionGoalId)) {
+    return [];
+  }
+  return [
+    {
+      type: 'QUEST_STARTED',
+      questId: npc.givesQuestId,
+      playerId: session.currentTurnPlayerId,
+    },
+  ];
+}
+
+/**
+ * Catches the case where the haiku classifier labelled "talk to Mira about
+ * the missing villagers" as EXAMINE (not TALK_TO_NPC), but the LLM still
+ * narrated dialogue and emitted npc_spoke → NPC_INTERACTION_RECORDED. Any
+ * conversation with an NPC that has `givesQuestId` should grant the quest,
+ * regardless of how the action was classified.
+ */
+function derivePostNarrateQuestGrants(
+  llmChanges: StateChange[],
+  adventure: AdventureDefinition,
+  session: GameSession,
+  alreadyEmitted: StateChange[],
+): StateChange[] {
+  const alreadyGrantedIds = new Set(
+    alreadyEmitted
+      .filter(
+        (c): c is Extract<StateChange, { type: 'QUEST_STARTED' }> => c.type === 'QUEST_STARTED',
+      )
+      .map((c) => c.questId),
+  );
+  const out: StateChange[] = [];
+  for (const change of llmChanges) {
+    if (change.type !== 'NPC_INTERACTION_RECORDED') continue;
+    const grants = resolveDialogQuestGrant(change.npcId, adventure, session);
+    for (const g of grants) {
+      if (g.type === 'QUEST_STARTED' && !alreadyGrantedIds.has(g.questId)) {
+        out.push(g);
+        alreadyGrantedIds.add(g.questId);
+      }
+    }
+  }
+  return out;
 }

@@ -92,11 +92,21 @@ function applyOne(
         ),
       })).get();
 
-    case 'NPC_DEFEATED':
-      return mutWorld(session, (w) => ({
+    case 'NPC_DEFEATED': {
+      // Auto-cascade goal completion. Both the engine (via resolveCombatAttack)
+      // and the LLM (via npc_defeated tool call) can emit NPC_DEFEATED — this
+      // ensures the matching DEFEAT_NPC goal completes regardless of source.
+      let result = mutWorld(session, (w) => ({
         ...w,
         defeatedNpcIds: addUnique(w.defeatedNpcIds, change.npcId),
       }));
+      for (const goal of Object.values(ctx.adventure.goals)) {
+        if (goal.type === 'DEFEAT_NPC' && goal.targetId === change.npcId) {
+          result = applyOne(result, { type: 'GOAL_COMPLETED', goalId: goal.id }, ctx);
+        }
+      }
+      return result;
+    }
 
     case 'NPC_HP_CHANGED':
       return mutWorld(session, (w) => ({
