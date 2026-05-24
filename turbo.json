@@ -1,5 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "ANTHROPIC_API_KEY",
+    "DATABASE_URL",
+    "BLOB_READ_WRITE_TOKEN",
+    "USE_LLM_INTENT_CLASSIFIER",
+    "VERCEL",
+    "VERCEL_ENV"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
