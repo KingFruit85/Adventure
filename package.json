@@ -2,6 +2,7 @@
   "name": "loreforge",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "description": "AI-narrated choose-your-own-adventure game service",
   "engines": {
     "node": ">=22"
