@@ -1,5 +1,5 @@
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { type GameSession, GameSessionSchema, type SessionSummary } from '@loreforge/shared';
+import { type NeonQueryFunction, neon } from '@neondatabase/serverless';
 import type { SessionStore } from './interface.js';
 
 interface SessionRow {
@@ -38,7 +38,8 @@ export class PostgresSessionStore implements SessionStore {
   }
 
   async get(sessionId: string): Promise<GameSession | null> {
-    const rows = (await this.sql`SELECT data FROM sessions WHERE id = ${sessionId}`) as SessionRow[];
+    const rows = (await this
+      .sql`SELECT data FROM sessions WHERE id = ${sessionId}`) as SessionRow[];
     const row = rows[0];
     return row ? GameSessionSchema.parse(row.data) : null;
   }
