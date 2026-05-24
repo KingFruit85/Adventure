@@ -11,6 +11,7 @@ import { getDeviceFingerprint } from './device-fingerprint.js';
 import { readSSE } from './sse-consumer.js';
 
 const DEVICE_HEADER = 'x-device-fingerprint';
+const API_BASE = '/api';
 
 function headers(extra: Record<string, string> = {}): Record<string, string> {
   return {
@@ -59,13 +60,13 @@ async function fetchOrFriendly(url: string, init?: RequestInit): Promise<Respons
 }
 
 export async function listAdventures(): Promise<AdventureMetadata[]> {
-  const res = await fetchOrFriendly('/adventures', { headers: headers() });
+  const res = await fetchOrFriendly(`${API_BASE}/adventures`, { headers: headers() });
   await expectOk(res);
   return res.json() as Promise<AdventureMetadata[]>;
 }
 
 export async function getAdventure(id: string): Promise<AdventureDefinition> {
-  const res = await fetchOrFriendly(`/adventures/${encodeURIComponent(id)}`, {
+  const res = await fetchOrFriendly(`${API_BASE}/adventures/${encodeURIComponent(id)}`, {
     headers: headers(),
   });
   await expectOk(res);
@@ -83,7 +84,7 @@ export interface CreateSessionResult {
 }
 
 export async function createSession(params: CreateSessionParams): Promise<CreateSessionResult> {
-  const res = await fetchOrFriendly('/sessions', {
+  const res = await fetchOrFriendly(`${API_BASE}/sessions`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(params),
@@ -93,7 +94,7 @@ export async function createSession(params: CreateSessionParams): Promise<Create
 }
 
 export async function getSessionByCode(code: string): Promise<GameSession> {
-  const res = await fetchOrFriendly(`/sessions/${encodeURIComponent(code)}`, {
+  const res = await fetchOrFriendly(`${API_BASE}/sessions/${encodeURIComponent(code)}`, {
     headers: headers(),
   });
   await expectOk(res);
@@ -102,7 +103,7 @@ export async function getSessionByCode(code: string): Promise<GameSession> {
 }
 
 export async function listMySessions(): Promise<SessionSummary[]> {
-  const res = await fetchOrFriendly('/device-sessions', { headers: headers() });
+  const res = await fetchOrFriendly(`${API_BASE}/device-sessions`, { headers: headers() });
   await expectOk(res);
   return res.json() as Promise<SessionSummary[]>;
 }
@@ -117,7 +118,7 @@ export async function* streamTurn(
   body: { playerId: string; input: string },
   signal?: AbortSignal,
 ): AsyncGenerator<TurnEvent, void, void> {
-  const res = await fetchOrFriendly(`/sessions/${encodeURIComponent(code)}/turn`, {
+  const res = await fetchOrFriendly(`${API_BASE}/sessions/${encodeURIComponent(code)}/turn`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),

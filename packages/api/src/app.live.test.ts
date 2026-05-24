@@ -6,11 +6,11 @@ import {
   AnthropicProvider,
   type EngineDependencies,
   FileSystemAdventureLoader,
-  FilesystemBlobStore,
   LLMIntentClassifier,
-  SQLiteSessionStore,
   loadEnv,
 } from '@loreforge/engine';
+import { FilesystemBlobStore } from '@loreforge/engine/blob/filesystem';
+import { SQLiteSessionStore } from '@loreforge/engine/session-store/sqlite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 
@@ -45,7 +45,7 @@ describe.runIf(LIVE)('API live integration', () => {
   });
 
   it('runs the full HTTP loop: create session → turn → SSE narrative', async () => {
-    const created = await app.request('/sessions', {
+    const created = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -60,7 +60,7 @@ describe.runIf(LIVE)('API live integration', () => {
     };
     const playerId = session.players[0]!.id;
 
-    const turn = await app.request(`/sessions/${sessionCode}/turn`, {
+    const turn = await app.request(`/api/sessions/${sessionCode}/turn`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ playerId, input: 'look around the tavern' }),

@@ -13,6 +13,14 @@
     "./app": {
       "types": "./dist/app.d.ts",
       "default": "./dist/app.js"
+    },
+    "./deps-factory": {
+      "types": "./dist/deps-factory.d.ts",
+      "default": "./dist/deps-factory.js"
+    },
+    "./deps-factory-vercel": {
+      "types": "./dist/deps-factory-vercel.d.ts",
+      "default": "./dist/deps-factory-vercel.js"
     }
   },
   "bin": {

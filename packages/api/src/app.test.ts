@@ -5,11 +5,11 @@ import { fileURLToPath } from 'node:url';
 import {
   type EngineDependencies,
   FileSystemAdventureLoader,
-  FilesystemBlobStore,
   KeywordIntentClassifier,
   MockLLMProvider,
-  SQLiteSessionStore,
 } from '@loreforge/engine';
+import { FilesystemBlobStore } from '@loreforge/engine/blob/filesystem';
+import { SQLiteSessionStore } from '@loreforge/engine/session-store/sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 
@@ -58,25 +58,25 @@ describe('LoreForge API', () => {
   });
 
   it('serves a health check', async () => {
-    const res = await harness.app.request('/health');
+    const res = await harness.app.request('/api/health');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
 
   it('lists available adventures', async () => {
-    const res = await harness.app.request('/adventures');
+    const res = await harness.app.request('/api/adventures');
     expect(res.status).toBe(200);
     const body = (await res.json()) as Array<{ id: string }>;
     expect(body.some((a) => a.id === 'whispers-of-eldenmoor')).toBe(true);
   });
 
   it('returns 404 for unknown adventure', async () => {
-    const res = await harness.app.request('/adventures/no-such-adventure');
+    const res = await harness.app.request('/api/adventures/no-such-adventure');
     expect(res.status).toBe(404);
   });
 
   it('creates a session and lets it be loaded by code', async () => {
-    const create = await harness.app.request('/sessions', {
+    const create = await harness.app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-device-fingerprint': 'fp-1' },
       body: JSON.stringify({
@@ -91,12 +91,12 @@ describe('LoreForge API', () => {
     };
     expect(created.sessionCode).toMatch(/^[A-Z]+-\d{2}-[A-Z]+$/);
 
-    const reload = await harness.app.request(`/sessions/${created.sessionCode}`);
+    const reload = await harness.app.request(`/api/sessions/${created.sessionCode}`);
     expect(reload.status).toBe(200);
     const loaded = (await reload.json()) as { session: { id: string } };
     expect(loaded.session.id).toBe(created.session.id);
 
-    const list = await harness.app.request('/device-sessions', {
+    const list = await harness.app.request('/api/device-sessions', {
       headers: { 'x-device-fingerprint': 'fp-1' },
     });
     expect(list.status).toBe(200);
@@ -105,7 +105,7 @@ describe('LoreForge API', () => {
   });
 
   it('rejects malformed session-create payload', async () => {
-    const res = await harness.app.request('/sessions', {
+    const res = await harness.app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ adventureId: 'whispers-of-eldenmoor' }), // missing players
@@ -114,7 +114,7 @@ describe('LoreForge API', () => {
   });
 
   it('streams a turn over SSE with text_delta + turn_complete events', async () => {
-    const create = await harness.app.request('/sessions', {
+    const create = await harness.app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -128,7 +128,7 @@ describe('LoreForge API', () => {
     };
     const playerId = session.players[0]!.id;
 
-    const turn = await harness.app.request(`/sessions/${sessionCode}/turn`, {
+    const turn = await harness.app.request(`/api/sessions/${sessionCode}/turn`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ playerId, input: 'look' }),
@@ -143,7 +143,7 @@ describe('LoreForge API', () => {
   });
 
   it('emits validation_error on a disallowed move', async () => {
-    const create = await harness.app.request('/sessions', {
+    const create = await harness.app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -157,7 +157,7 @@ describe('LoreForge API', () => {
     };
     const playerId = session.players[0]!.id;
 
-    const turn = await harness.app.request(`/sessions/${sessionCode}/turn`, {
+    const turn = await harness.app.request(`/api/sessions/${sessionCode}/turn`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ playerId, input: 'north' }),

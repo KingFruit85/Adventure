@@ -6,11 +6,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Forward all API routes to the Hono backend in dev.
-      '/sessions': { target: 'http://localhost:3000', changeOrigin: true },
-      '/adventures': { target: 'http://localhost:3000', changeOrigin: true },
-      '/device-sessions': { target: 'http://localhost:3000', changeOrigin: true },
-      '/health': { target: 'http://localhost:3000', changeOrigin: true },
+      // Forward all API routes (mounted under /api in buildApp) to the Hono
+      // backend in dev. Matches the Vercel-prod URL shape so the web client
+      // uses the same paths everywhere.
+      '/api': { target: 'http://localhost:3000', changeOrigin: true },
     },
   },
 });

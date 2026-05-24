@@ -4,12 +4,12 @@ import {
   AnthropicProvider,
   type EngineDependencies,
   FileSystemAdventureLoader,
-  FilesystemBlobStore,
   KeywordIntentClassifier,
   LLMIntentClassifier,
-  SQLiteSessionStore,
   loadEnv,
 } from '@loreforge/engine';
+import { FilesystemBlobStore } from '@loreforge/engine/blob/filesystem';
+import { SQLiteSessionStore } from '@loreforge/engine/session-store/sqlite';
 
 export interface DepsFactoryConfig {
   adventuresDir?: string;

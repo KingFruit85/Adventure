@@ -34,7 +34,11 @@ const TurnBody = z.object({
  * HTTP surface without burning API credits.
  */
 export function buildApp(deps: EngineDependencies) {
-  const app = new Hono();
+  // Everything is mounted under /api. In production on Vercel, vercel.json
+  // rewrites /api/* to the function entrypoint so this matches the URL the
+  // client sees. In dev, Vite proxies /api/* to localhost:3000 so the same
+  // paths work end-to-end.
+  const app = new Hono().basePath('/api');
   app.use('*', cors());
 
   app.get('/health', (c) => c.json({ ok: true }));

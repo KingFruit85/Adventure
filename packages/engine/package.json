@@ -17,6 +17,22 @@
     "./session-store": {
       "types": "./dist/session-store/index.d.ts",
       "default": "./dist/session-store/index.js"
+    },
+    "./session-store/sqlite": {
+      "types": "./dist/session-store/sqlite.d.ts",
+      "default": "./dist/session-store/sqlite.js"
+    },
+    "./session-store/postgres": {
+      "types": "./dist/session-store/postgres.d.ts",
+      "default": "./dist/session-store/postgres.js"
+    },
+    "./blob/filesystem": {
+      "types": "./dist/blob/filesystem.d.ts",
+      "default": "./dist/blob/filesystem.js"
+    },
+    "./blob/vercel": {
+      "types": "./dist/blob/vercel.d.ts",
+      "default": "./dist/blob/vercel.js"
     }
   },
   "scripts": {
@@ -27,6 +43,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
     "@loreforge/shared": "workspace:*",
+    "@neondatabase/serverless": "^1.1.0",
+    "@vercel/blob": "^2.4.0",
     "better-sqlite3": "^11.7.0",
     "dotenv": "^16.4.7",
     "yaml": "^2.6.1",
