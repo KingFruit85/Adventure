@@ -5,6 +5,8 @@ import { useSessionStore } from '../stores/sessionStore.js';
 import { useVoiceOutput } from './useVoiceOutput.js';
 
 export interface TurnState {
+  /** The player input for the currently-in-flight turn (echoed in the log). */
+  currentInput: string;
   /** Currently-accumulating narrative for the in-flight turn. */
   narrative: string;
   /** Streaming. True while events are still arriving. */
@@ -13,11 +15,12 @@ export interface TurnState {
   validationError: string | null;
   /** Most recent dice roll for this turn (if any). */
   lastRoll: DiceRoll | null;
-  /** Final state changes applied this turn (from turn_complete). */
+  /** State changes accumulated this turn (live during streaming, final on turn_complete). */
   changes: StateChange[];
 }
 
 const EMPTY_STATE: TurnState = {
+  currentInput: '',
   narrative: '',
   streaming: false,
   validationError: null,
@@ -44,7 +47,7 @@ export function useTurn(sessionCode: string, voiceOutputEnabled: boolean) {
       abortRef.current = controller;
       voice.cancel();
 
-      setState({ ...EMPTY_STATE, streaming: true });
+      setState({ ...EMPTY_STATE, streaming: true, currentInput: input });
 
       try {
         for await (const event of streamTurn(sessionCode, { playerId, input }, controller.signal)) {
@@ -96,8 +99,11 @@ function applyEvent(
       setState((prev) => ({ ...prev, changes: [...prev.changes, event.change] }));
       break;
     case 'turn_complete':
+      // The just-finished turn is now durable in session.memoryState.activeTurns,
+      // so the in-flight buffer can be cleared. The log component reads the
+      // completed turn from the session, not from this hook.
       setSession(event.updatedSession);
-      setState((prev) => ({ ...prev, streaming: false, changes: event.stateChanges }));
+      setState(() => EMPTY_STATE);
       break;
   }
 }

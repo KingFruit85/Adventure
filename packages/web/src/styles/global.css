@@ -230,9 +230,62 @@ select:focus {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: var(--space-lg);
-  min-height: 200px;
   white-space: pre-wrap;
   position: relative;
+}
+
+/* ----- Turn log (scrollable history) ------- */
+
+.turn-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+  padding-right: var(--space-sm);
+  scroll-behavior: smooth;
+}
+.turn-log::-webkit-scrollbar {
+  width: 8px;
+}
+.turn-log::-webkit-scrollbar-track {
+  background: transparent;
+}
+.turn-log::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 4px;
+}
+
+.turn-log-empty {
+  font-family: var(--font-narrative);
+  font-size: 18px;
+  padding: var(--space-lg);
+  background-color: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.turn-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.turn-entry.in-flight .narrative {
+  border-color: var(--color-accent-soft);
+}
+
+.turn-entry-input {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-dim);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-bg);
+  border-left: 2px solid var(--color-accent);
+  border-radius: 2px;
+}
+.turn-entry-prompt {
+  color: var(--color-accent);
+  margin-right: var(--space-xs);
 }
 .narrative.streaming::after {
   content: "▍";
