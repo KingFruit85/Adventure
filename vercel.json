@@ -6,7 +6,6 @@
   "framework": null,
   "functions": {
     "api/index.ts": {
-      "runtime": "nodejs22.x",
       "maxDuration": 300,
       "memory": 1024,
       "includeFiles": "adventures/**"
